@@ -73,13 +73,32 @@
   }
 
   async function fetchAllLinks() {
-    const targetUrl = `${CONFIG.API_BASE}/api/links?domain_id=${CONFIG.DOMAIN_ID}&limit=${CONFIG.LINKS_PER_PAGE}&_t=${Date.now()}`;
-    const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
+    let allLinks = [];
+    let pageToken = '';
 
-    const res = await fetch(proxyUrl, { headers: apiHeaders() });
-    if (!res.ok) throw new Error(`Failed to fetch links: ${res.status} ${res.statusText}`);
-    const data = await res.json();
-    return data.links || [];
+    while (true) {
+      let targetUrl = `${CONFIG.API_BASE}/api/links?domain_id=${CONFIG.DOMAIN_ID}&limit=${CONFIG.LINKS_PER_PAGE}&_t=${Date.now()}`;
+      if (pageToken) {
+        targetUrl += `&pageToken=${pageToken}`;
+      }
+      const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
+
+      const res = await fetch(proxyUrl, { headers: apiHeaders() });
+      if (!res.ok) throw new Error(`Failed to fetch links: ${res.status} ${res.statusText}`);
+      
+      const data = await res.json();
+      if (data.links && data.links.length > 0) {
+        allLinks = allLinks.concat(data.links);
+      }
+
+      if (data.nextPageToken) {
+        pageToken = data.nextPageToken;
+      } else {
+        break; // No more pages
+      }
+    }
+
+    return allLinks;
   }
 
   async function fetchLinkStats(linkId) {
