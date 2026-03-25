@@ -13,6 +13,7 @@
     API_BASE: 'https://api.short.io',
     STATS_BASE: 'https://statistics.short.io',
     LINKS_PER_PAGE: 150,
+    N8N_WEBHOOK_URL: '', // e.g. 'https://your-n8n.com/webhook/partner-conversions'
   };
 
   // ─── State ───
@@ -20,6 +21,7 @@
     apiKey: 'sk_LJK53T8xGgloqR3U',
     links: [],       // raw link objects from Short.io
     stats: {},       // linkId → stats object
+    conversions: {}, // partner_ref → conversion count (from n8n)
     merged: [],      // links + stats merged (filtered to tracked only)
     sortField: null,
     sortAsc: true,
@@ -43,6 +45,7 @@
     totalClicks: $('#totalClicks'),
     humanClicks: $('#humanClicks'),
     botClicks: $('#botClicks'),
+    totalConversions: $('#totalConversions'),
     // Filters
     searchPartner: $('#searchPartner'),
     searchPath: $('#searchPath'),
@@ -131,6 +134,21 @@
     }
   }
 
+  async function fetchConversions() {
+    if (!CONFIG.N8N_WEBHOOK_URL) return {};
+    try {
+      // Add cache-bust
+      const url = `${CONFIG.N8N_WEBHOOK_URL}?_t=${Date.now()}`;
+      const res = await fetch(url);
+      if (!res.ok) return {};
+      const data = await res.json();
+      return data.conversions || {}; // Expecting { "kavya-1234": 3 }
+    } catch (e) {
+      console.error('Failed to fetch conversions from n8n:', e);
+      return {};
+    }
+  }
+
   async function createShortLink({ originalURL, slug, title, tags }) {
     const body = {
       originalURL,
@@ -171,21 +189,16 @@
 
       const stats = {};
 
-      // Fetch stats individually for tracked links (with cache-busting)
-      const batchSize = 5;
-      for (let i = 0; i < trackedLinks.length; i += batchSize) {
-        const batch = trackedLinks.slice(i, i + batchSize);
-        const results = await Promise.all(
-          batch.map((link) => fetchLinkStats(link.idString || link.id))
-        );
-        batch.forEach((link, idx) => {
-          const linkId = link.idString || link.id;
-          if (results[idx]) {
-            stats[linkId] = results[idx];
-          }
-        });
-      }
-
+      // Fetch conversions from n8n in parallel with stats
+      const [conversionsResult] = await Promise.all([
+        fetchConversions(),
+        ...trackedLinks.map(async (link) => {
+          const id = link.idString || link.id;
+          stats[id] = await fetchLinkStats(id);
+        })
+      ]);
+      
+      state.conversions = conversionsResult || {};
       state.stats = stats;
 
       // Merge (only tracked partners)
@@ -209,15 +222,27 @@
         const linkId = link.idString || link.id;
         const stat = state.stats[linkId] || {};
         
+        let partnerRef = '';
+        try {
+          if (link.originalURL) {
+            const urlObj = new URL(link.originalURL);
+            partnerRef = urlObj.searchParams.get('partner_ref') || '';
+          }
+        } catch(e) {}
+
         const partnerEmail = link.tags.find(t => t.startsWith('email:'))?.split('email:')[1] || '';
         const partnerPhone = link.tags.find(t => t.startsWith('phone:'))?.split('phone:')[1] || '';
 
         const totalClicks = Number(stat.totalClicks) || 0;
         const humanClicks = Number(stat.humanClicks) || 0;
         const botClicks = Math.max(0, totalClicks - humanClicks);
+        const conversions = Number(state.conversions[partnerRef]) || 0;
+        
+        const convRate = humanClicks > 0 ? ((conversions / humanClicks) * 100).toFixed(1) : '0.0';
         
         return {
           linkId,
+          partnerRef,
           partnerName: link.title || '—',
           partnerEmail,
           partnerPhone,
@@ -227,6 +252,8 @@
           totalClicks,
           humanClicks,
           botClicks,
+          conversions,
+          convRate: Number(convRate),
           status: link.archived ? 'inactive' : 'active',
           createdAt: link.createdAt,
         };
@@ -242,15 +269,17 @@
         acc.totalClicks += d.totalClicks;
         acc.humanClicks += d.humanClicks;
         acc.botClicks += d.botClicks;
+        acc.conversions += d.conversions;
         return acc;
       },
-      { totalClicks: 0, humanClicks: 0, botClicks: 0 }
+      { totalClicks: 0, humanClicks: 0, botClicks: 0, conversions: 0 }
     );
 
     dom.totalLinks.textContent = formatNumber(data.length);
     dom.totalClicks.textContent = formatNumber(totals.totalClicks);
     dom.humanClicks.textContent = formatNumber(totals.humanClicks);
     dom.botClicks.textContent = formatNumber(totals.botClicks);
+    dom.totalConversions.textContent = formatNumber(totals.conversions);
   }
 
   function renderTable() {
@@ -291,6 +320,8 @@
         <td class="metric">${formatNumber(d.totalClicks)}</td>
         <td class="metric">${formatNumber(d.humanClicks)}</td>
         <td class="metric">${formatNumber(d.botClicks)}</td>
+        <td class="metric" style="color: #10b981; font-weight: 600;">${formatNumber(d.conversions)}</td>
+        <td class="metric">${d.convRate}%</td>
         <td><span class="status-badge status-${d.status}">${d.status}</span></td>
       </tr>
     `).join('');
