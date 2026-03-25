@@ -474,9 +474,23 @@
     const destUrl = $('#destinationUrl').value.trim();
     const slug = $('#customSlug').value.trim();
 
+    // Short.io returns the exact same link if the destination URL is identical without a custom slug.
+    // To ensure a BRAND NEW link is created for each partner, we make the destination unique
+    // by appending a partner-specific tracking parameter (which is also useful for analytics).
+    let uniqueDestUrl = destUrl;
+    try {
+      const urlObj = new URL(destUrl);
+      const safeName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const refId = `${safeName}-${Date.now().toString().slice(-4)}`;
+      urlObj.searchParams.set('partner_ref', refId);
+      uniqueDestUrl = urlObj.toString();
+    } catch (e) {
+      // If the URL is somehow malformed, fallback to original
+    }
+
     try {
       const link = await createShortLink({
-        originalURL: destUrl,
+        originalURL: uniqueDestUrl,
         slug: slug || undefined,
       });
 
