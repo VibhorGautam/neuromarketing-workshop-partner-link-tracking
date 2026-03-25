@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Partner link tracking dashboard for Neuromarketing Workshop — monitor clicks, engagement, and partner performance in real-time.">
+  <title>Partner Link Tracker — Neuromarketing Workshop</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Add Partner Modal -->
+  <div id="addPartnerModal" class="modal-overlay hidden">
+    <div class="modal">
+      <button class="modal-close" id="closeAddPartner">&times;</button>
+      <div class="modal-icon">👤</div>
+      <h2>Add New Partner</h2>
+      <p class="modal-subtitle">Create a tracked short link for a new partner</p>
+      <form id="addPartnerForm">
+        <div class="form-group">
+          <label for="partnerName">Partner Name <span class="required">*</span></label>
+          <input type="text" id="partnerName" placeholder="e.g. Acme Corp" required>
+        </div>
+        <div class="form-group">
+          <label for="partnerEmail">Partner Email <span class="optional">(optional)</span></label>
+          <input type="email" id="partnerEmail" placeholder="partner@example.com">
+        </div>
+        <div class="form-group">
+          <label for="partnerPhone">Partner Phone <span class="optional">(optional)</span></label>
+          <input type="tel" id="partnerPhone" placeholder="+91 98765 43210">
+        </div>
+        <div class="form-group">
+          <label for="destinationUrl">Destination URL <span class="required">*</span></label>
+          <input type="url" id="destinationUrl" value="https://alcovia.life/neuromarketing-workshop" required>
+        </div>
+        <div class="form-group">
+          <label for="customSlug">Custom Slug <span class="optional">(optional)</span></label>
+          <input type="text" id="customSlug" placeholder="e.g. partner-acme">
+        </div>
+        <div id="addPartnerError" class="form-error hidden"></div>
+        <button type="submit" class="btn btn-primary btn-full" id="addPartnerBtn">
+          <span class="btn-text">Create Partner Link</span>
+          <span class="btn-icon">+</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main Dashboard -->
+  <div id="dashboard" class="dashboard">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1 class="logo">
+          <span class="logo-icon">📊</span>
+          Partner Link Tracker
+        </h1>
+        <span class="badge">Neuromarketing Workshop</span>
+      </div>
+      <div class="header-right">
+        <button class="btn btn-secondary" id="refreshBtn" title="Refresh data">
+          <span class="refresh-icon">↻</span> Refresh
+        </button>
+        <button class="btn btn-accent" id="addPartnerTrigger">
+          <span>+</span> Add Partner
+        </button>
+      </div>
+    </header>
+
+    <!-- Summary Cards -->
+    <section class="summary-cards">
+      <div class="card card-total-links">
+        <div class="card-icon">🔗</div>
+        <div class="card-content">
+          <span class="card-value" id="totalLinks">—</span>
+          <span class="card-label">Total Links</span>
+        </div>
+      </div>
+      <div class="card card-total-clicks">
+        <div class="card-icon">👆</div>
+        <div class="card-content">
+          <span class="card-value" id="totalClicks">—</span>
+          <span class="card-label">Total Clicks</span>
+        </div>
+      </div>
+      <div class="card card-human-clicks">
+        <div class="card-icon">🧑</div>
+        <div class="card-content">
+          <span class="card-value" id="humanClicks">—</span>
+          <span class="card-label">Human Clicks</span>
+        </div>
+      </div>
+      <div class="card card-bot-clicks">
+        <div class="card-icon">🤖</div>
+        <div class="card-content">
+          <span class="card-value" id="botClicks">—</span>
+          <span class="card-label">Bot Clicks</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Filters -->
+    <section class="filters">
+      <div class="filter-group">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchPartner" placeholder="Search by partner name...">
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="search-box">
+          <span class="search-icon">/</span>
+          <input type="text" id="searchPath" placeholder="Filter by path / slug...">
+        </div>
+      </div>
+      <div class="filter-group">
+        <select id="filterStatus" class="filter-select">
+          <option value="all">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Data Table -->
+    <section class="table-container">
+      <div id="loadingState" class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading partner analytics...</p>
+      </div>
+      <div id="emptyState" class="empty-state hidden">
+        <div class="empty-icon">📭</div>
+        <h3>No partners found</h3>
+        <p>Add a partner or adjust your filters</p>
+      </div>
+      <table id="partnerTable" class="data-table hidden">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="partnerName">Partner Name</th>
+            <th>Short Link</th>
+            <th>Path</th>
+            <th class="sortable" data-sort="totalClicks">Total Clicks</th>
+            <th class="sortable" data-sort="humanClicks">Human Clicks</th>
+            <th class="sortable" data-sort="botClicks">Bot Clicks</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>Powered by <strong>Short.io</strong> • Last updated: <span id="lastUpdated">—</span></p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
