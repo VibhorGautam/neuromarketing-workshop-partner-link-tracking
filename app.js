@@ -73,7 +73,7 @@
   }
 
   async function fetchAllLinks() {
-    const targetUrl = `${CONFIG.API_BASE}/api/links?domain_id=${CONFIG.DOMAIN_ID}&limit=${CONFIG.LINKS_PER_PAGE}`;
+    const targetUrl = `${CONFIG.API_BASE}/api/links?domain_id=${CONFIG.DOMAIN_ID}&limit=${CONFIG.LINKS_PER_PAGE}&_t=${Date.now()}`;
     const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
 
     const res = await fetch(proxyUrl, { headers: apiHeaders() });
@@ -84,7 +84,7 @@
 
   async function fetchLinkStats(linkId) {
     // Exact same endpoint as the n8n workflow: api-v2.short.io with domain_id param
-    const targetUrl = `https://api-v2.short.io/statistics/link/${linkId}?period=total&tzOffset=0&domain_id=${CONFIG.DOMAIN_ID}`;
+    const targetUrl = `https://api-v2.short.io/statistics/link/${linkId}?period=total&tzOffset=0&domain_id=${CONFIG.DOMAIN_ID}&_t=${Date.now()}`;
     const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
 
     try {
