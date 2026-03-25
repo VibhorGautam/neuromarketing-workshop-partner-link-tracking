@@ -73,11 +73,10 @@
   }
 
   async function fetchAllLinks() {
-    const url = new URL(`${CONFIG.API_BASE}/api/links`);
-    url.searchParams.set('domain_id', CONFIG.DOMAIN_ID);
-    url.searchParams.set('limit', CONFIG.LINKS_PER_PAGE);
+    const targetUrl = `${CONFIG.API_BASE}/api/links?domain_id=${CONFIG.DOMAIN_ID}&limit=${CONFIG.LINKS_PER_PAGE}`;
+    const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
 
-    const res = await fetch(url.toString(), { headers: apiHeaders() });
+    const res = await fetch(proxyUrl, { headers: apiHeaders() });
     if (!res.ok) throw new Error(`Failed to fetch links: ${res.status} ${res.statusText}`);
     const data = await res.json();
     return data.links || [];
@@ -128,7 +127,10 @@
     };
     if (slug) body.path = slug;
 
-    const res = await fetch(`${CONFIG.API_BASE}/links`, {
+    const targetUrl = `${CONFIG.API_BASE}/links`;
+    const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`;
+
+    const res = await fetch(proxyUrl, {
       method: 'POST',
       headers: {
         ...apiHeaders(),
@@ -484,7 +486,9 @@
 
       // Also try to update the link title via Short.io API
       try {
-        await fetch(`${CONFIG.API_BASE}/links/${linkId}`, {
+        const updateUrl = `${CONFIG.API_BASE}/links/${linkId}`;
+        const updateProxy = `https://corsproxy.io/?url=${encodeURIComponent(updateUrl)}`;
+        await fetch(updateProxy, {
           method: 'POST',
           headers: {
             ...apiHeaders(),
