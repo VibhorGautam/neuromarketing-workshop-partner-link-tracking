@@ -15,14 +15,6 @@
     LINKS_PER_PAGE: 150,
   };
 
-  // ─── Seed known partners (keyed by Short.io link path/slug) ───
-  // These are partners whose links already exist in Short.io.
-  // On first load, we match them by path and store in localStorage.
-  const SEED_PARTNERS = {
-    'bOAwS8': { name: 'Kavya' },
-    '0nQRfi': { name: 'Test Partner' },
-  };
-
   // ─── State ───
   const state = {
     apiKey: 'sk_LJK53T8xGgloqR3U',
@@ -139,10 +131,12 @@
     }
   }
 
-  async function createShortLink({ originalURL, slug }) {
+  async function createShortLink({ originalURL, slug, title, tags }) {
     const body = {
       originalURL,
       domain: CONFIG.DOMAIN,
+      title: title || undefined,
+      tags: tags || undefined,
     };
     if (slug) body.path = slug;
 
@@ -164,44 +158,6 @@
     return await res.json();
   }
 
-  // ─── Partner Metadata (localStorage) ───
-
-  function getPartnerMeta() {
-    try {
-      return JSON.parse(localStorage.getItem('partnerMeta') || '{}');
-    } catch {
-      return {};
-    }
-  }
-
-  function setPartnerMeta(linkId, meta) {
-    const all = getPartnerMeta();
-    all[linkId] = { ...all[linkId], ...meta };
-    localStorage.setItem('partnerMeta', JSON.stringify(all));
-  }
-
-  function isTrackedPartner(linkId) {
-    const meta = getPartnerMeta();
-    return !!meta[linkId];
-  }
-
-  // Seed known partners on first run by matching paths
-  function seedPartners(links) {
-    const meta = getPartnerMeta();
-    let changed = false;
-    links.forEach((link) => {
-      const linkId = link.idString || link.id;
-      const path = link.path || '';
-      if (SEED_PARTNERS[path] && !meta[linkId]) {
-        meta[linkId] = { ...SEED_PARTNERS[path] };
-        changed = true;
-      }
-    });
-    if (changed) {
-      localStorage.setItem('partnerMeta', JSON.stringify(meta));
-    }
-  }
-
   // ─── Data Loading ───
 
   async function loadDashboard() {
@@ -210,15 +166,8 @@
       const links = await fetchAllLinks();
       state.links = links;
 
-      // Seed known partners on first load
-      seedPartners(links);
-
-      // Only fetch stats for tracked partners
-      const meta = getPartnerMeta();
-      const trackedLinks = links.filter((link) => {
-        const linkId = link.idString || link.id;
-        return !!meta[linkId];
-      });
+      // Only fetch stats for links tagged as 'partner-link' in Short.io
+      const trackedLinks = links.filter(link => link.tags && link.tags.includes('partner-link'));
 
       const stats = {};
 
@@ -253,25 +202,25 @@
   }
 
   function mergeData() {
-    const meta = getPartnerMeta();
-    // Only include links that are tracked (have partner metadata)
+    // Only include links physically tagged as partners in Short.io
     state.merged = state.links
-      .filter((link) => {
-        const linkId = link.idString || link.id;
-        return !!meta[linkId];
-      })
+      .filter((link) => link.tags && link.tags.includes('partner-link'))
       .map((link) => {
         const linkId = link.idString || link.id;
         const stat = state.stats[linkId] || {};
-        const partnerInfo = meta[linkId] || {};
+        
+        const partnerEmail = link.tags.find(t => t.startsWith('email:'))?.split('email:')[1] || '';
+        const partnerPhone = link.tags.find(t => t.startsWith('phone:'))?.split('phone:')[1] || '';
+
         const totalClicks = Number(stat.totalClicks) || 0;
         const humanClicks = Number(stat.humanClicks) || 0;
         const botClicks = Math.max(0, totalClicks - humanClicks);
+        
         return {
           linkId,
-          partnerName: partnerInfo.name || link.title || '—',
-          partnerEmail: partnerInfo.email || '',
-          partnerPhone: partnerInfo.phone || '',
+          partnerName: link.title || '—',
+          partnerEmail,
+          partnerPhone,
           shortURL: link.secureShortURL || link.shortURL || '',
           path: link.path || '',
           originalURL: link.originalURL || '',
@@ -508,30 +457,16 @@
     }
 
     try {
-      const link = await createShortLink({
+      const tags = ['partner-link'];
+      if (email) tags.push(`email:${email}`);
+      if (phone) tags.push(`phone:${phone}`);
+
+      await createShortLink({
         originalURL: uniqueDestUrl,
         slug: slug || undefined,
+        title: name,
+        tags: tags,
       });
-
-      // Store partner metadata locally
-      const linkId = link.idString || link.id;
-      setPartnerMeta(linkId, { name, email, phone });
-
-      // Also try to update the link title via Short.io API
-      try {
-        const updateUrl = `${CONFIG.API_BASE}/links/${linkId}`;
-        const updateProxy = `https://corsproxy.io/?url=${encodeURIComponent(updateUrl)}`;
-        await fetch(updateProxy, {
-          method: 'POST',
-          headers: {
-            ...apiHeaders(),
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ title: name }),
-        });
-      } catch {
-        // Non-critical, metadata is stored locally
-      }
 
       dom.addPartnerModal.classList.add('hidden');
       await loadDashboard();
